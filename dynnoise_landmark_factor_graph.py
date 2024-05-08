@@ -117,7 +117,6 @@ def main(args):
     for i in range(N):
         landmarks = L_class.detect_landmarks(true_pose_arr[i,:],Rs,add_noise=True)
         for key, values in landmarks.items():
-            # print(f"Pose {i} detected landmark {key}")
             landmark_factor = gtsam.BearingRangeFactor2D(X(i),L(key),gtsam.Rot2(values[0]),values[1],BR_NOISE)
             factor_graph.add(landmark_factor)
     
@@ -136,21 +135,20 @@ def main(args):
     ax.plot(raw_odometry_pose_arr[:,0],raw_odometry_pose_arr[:,1],'r*--',label="Raw Odometry")
     ax.plot(estimated_path[:,0],estimated_path[:,1],'g*--',label="Factor Graph Estimate")
     # ax.scatter(est_landmarks[:,0],est_landmarks[:,1],marker='^',c='g',label="Factor Graph Landmark Estimate")
-    ax.scatter(true_landmarks[:,0],true_landmarks[:,1],marker='^',c='orange',label="Landmarks")
+    ax.scatter(true_landmarks[:,0],true_landmarks[:,1],marker='^',c='grey',label="Landmarks")
     for i in range(N):
         landmarks = L_class.detect_landmarks(true_pose_arr[i,:],Rs)
         for key, values in landmarks.items():
-            ax.plot([estimated_path[i,0],L_class.landmarks[key][0]],[estimated_path[i,1],L_class.landmarks[key][1]],linestyle='--',lw=0.5,color='orange')
+            ax.plot([estimated_path[i,0],L_class.landmarks[key][0]],[estimated_path[i,1],L_class.landmarks[key][1]],linestyle='--',lw=0.5,color='grey')
     
     ## Plot covariances
     if plot_noise:
         marginals = gtsam.Marginals(factor_graph, optimized_estimate)
         for i in range(N):
-            # Get rotation from local frame to world frame
-            R_i_to_w = optimized_estimate.atPose2(X(i)).matrix()[:2,:2]
             cov = marginals.marginalCovariance(X(i))
-            xy_cov = R_i_to_w @ cov[:2,:2]
+            xy_cov = cov[:2,:2]
             l1, l2, theta = compute_ellipse_radiirot(xy_cov)
+            theta += optimized_estimate.atPose2(X(i)).theta()
             if i == 0:
                 ellipse = Ellipse(tuple([estimated_path[i,0],estimated_path[i,1]]), 
                                 width=2 * 3*np.sqrt(l1),
@@ -184,7 +182,7 @@ def main(args):
     plt.xlabel("X")
     plt.ylabel("Y")
     plt.legend()
-    plt.title("Noise, Odometry + Landmarks")
+    plt.title(f"Noise, Odometry + {args.num_landmarks} Landmarks")
     plt.show()
     
 def parser():
@@ -195,8 +193,8 @@ def parser():
     parser.add_argument('--num_landmarks',default=8,type=int,help="Number of landmarks to place in environment")
     parser.add_argument('--Tmax',default=20,type=float,help="Number of seconds to run simulation")
     parser.add_argument('--dt',default=0.5,type=float,help='Time difference between odometry factors')
-    parser.add_argument('--translational_noise',default=0.025,type=float,help='Translational noise percentage')
-    parser.add_argument('--rotational_noise',default=0.05,type=float,help='Rotational noise percentage')
+    parser.add_argument('--translational_noise',default=0.01,type=float,help='Translational noise percentage')
+    parser.add_argument('--rotational_noise',default=0.15,type=float,help='Rotational noise percentage')
     return parser
 
 if __name__ == "__main__":

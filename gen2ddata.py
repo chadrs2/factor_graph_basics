@@ -31,19 +31,39 @@ def square_data(T,dt,x0=0.0,y0=0.0,theta0=0.0):
     y = np.zeros_like(t)
     theta = np.zeros_like(t)
     for i in range(len(t)):
+        # print(i)
         if i < N//4: # Drive straight
+            # print("Drive straight")
             x[i] = x0 + t[i]*np.cos(theta0)
             y[i] = y0 + t[i]*np.sin(theta0)
             theta[i] = theta0
+        # elif i == N//4:
+        #     print("Drive straight & turn")
+        #     x[i] = x[i-1] + dt*np.cos(theta0)
+        #     y[i] = y[i-1] + dt*np.sin(theta0)
+        #     theta[i] = theta0 + np.pi/2
         elif i < N//2: # Drive up
+            # print("Drive up")
             x[i] = x[i-1] + dt*np.cos(theta0 + np.pi/2)
             y[i] = y[i-1] + dt*np.sin(theta0 + np.pi/2)
             theta[i] = theta0 + np.pi / 2
+        # elif i == N//2:
+        #     print("Drive up & turn")
+        #     x[i] = x[i-1] + dt*np.cos(theta0 + np.pi / 2)
+        #     y[i] = y[i-1] + dt*np.sin(theta0 + np.pi / 2)
+        #     theta[i] = theta0 + np.pi
         elif i < (3*N)//4: # Drive back
+            # print("Drive back")
             x[i] = x[i-1] + dt*np.cos(theta0 + np.pi)
             y[i] = y[i-1] + dt*np.sin(theta0 + np.pi)
             theta[i] = theta0 + np.pi
+        # elif i == (3*N)//4:
+        #     print("Drive back & turn")
+        #     x[i] = x[i-1] + dt*np.cos(theta0 + np.pi)
+        #     y[i] = y[i-1] + dt*np.sin(theta0 + np.pi)
+        #     theta[i] = theta0 - np.pi/2
         else: # Drive down
+            # print("Drive down")
             x[i] = x[i-1] + dt*np.cos(theta0 - np.pi/2)
             y[i] = y[i-1] + dt*np.sin(theta0 - np.pi/2)
             theta[i] = theta0 - np.pi / 2

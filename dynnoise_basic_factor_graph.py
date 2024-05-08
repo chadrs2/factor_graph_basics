@@ -77,11 +77,15 @@ def compute_ellipse_radiirot(cov):
         theta = np.arctan2(l1-a, b)
     return l1, l2, theta
 
+
 def main(args):
     np.random.seed(args.seed)
     plot_noise = args.plot_noise
     use_GPS = args.use_gps
     do_loopclosure = args.do_loopclosure
+    if use_GPS:
+        gps_noise = 0.5
+        GPS_NOISE = gtsam.noiseModel.Isotropic.Sigma(2, gps_noise) # x,y noise
 
     ## Generate Simulated Data
     dt = args.dt
@@ -113,8 +117,8 @@ def main(args):
         if do_loopclosure and i == N:
             pi_wrt_w = true_Pose2[0]
         else:
-            pi_wrt_w = true_Pose2[i] # Pose of the robot at t=i w.r.t. the world frame
-        pimin1_wrt_w = true_Pose2[i-1] # Pose of the robot at t=i-1 w.r.t. the world frame
+            pi_wrt_w = true_Pose2[i] # Pose of the robot at t=i w.r.t. the world frame. H_i_to_w
+        pimin1_wrt_w = true_Pose2[i-1] # Pose of the robot at t=i-1 w.r.t. the world frame. H_i-1_to_w
         H_i_to_imin1 = pimin1_wrt_w.inverse().compose(pi_wrt_w) # Transformation from pose i to pose i-1
         ## Add noise
         dx_noise = abs(H_i_to_imin1.x()) * dtrans_p + 1e-3
@@ -124,7 +128,7 @@ def main(args):
         noise = np.random.normal([0,0,0],od_noise[-1])
         delta_noise = gtsam.Pose2(noise[0],noise[1],noise[2])
         odometry_meas.append(H_i_to_imin1.compose(delta_noise))
-    
+
     ## Estimated Trajectory from raw Odometry
     raw_odometry_pose = []
     for i in range(N):
@@ -141,8 +145,10 @@ def main(args):
     factor_graph.push_back(
         gtsam.PriorFactorPose2(
             0,
-            true_Pose2[0],
-            gtsam.noiseModel.Diagonal.Sigmas(np.array(od_noise[0]))))
+            raw_odometry_pose[0],
+            gtsam.noiseModel.Diagonal.Sigmas(np.array([1e-3+dtrans_p,1e-3+dtrans_p,2e-2+drot_p]))
+        )
+    )
     initial_estimate = gtsam.Values()
     for i in range(N):
             initial_estimate.insert(i, raw_odometry_pose[i])
@@ -159,10 +165,10 @@ def main(args):
 
     ## Add GPS factors
     if use_GPS:
-        GPS_NOISE = gtsam.noiseModel.Isotropic.Sigma(2, 0.1) # x,y noise
-        for i in range(len(raw_odometry_pose)):
+        for i in range(N):
             if i % 2 == 0:
-                gps_meas = gtsam.Point2(true_Pose2[i].translation() + np.random.normal(0,0.1,size=(2,)))
+                # print("Add GPS factor to factor",i)
+                gps_meas = gtsam.Point2(true_Pose2[i].translation() + np.random.normal(0,gps_noise,size=(2,)))
                 gps_factor = gtsam.CustomFactor(GPS_NOISE, [i], partial(error_gps2, gps_meas))
                 factor_graph.add(gps_factor)
     
@@ -177,6 +183,7 @@ def main(args):
     ## Plot estimates
     fig, ax = plt.subplots()
     ax.plot(true_pose_arr[:,0],true_pose_arr[:,1],'b*-',label="True")
+    ax.plot([true_pose_arr[:,0],true_pose_arr[:,0]+dt/4*np.cos(true_pose_arr[:,2])],[true_pose_arr[:,1],true_pose_arr[:,1]+dt/4*np.sin(true_pose_arr[:,2])],color='orange')
     ax.plot(raw_odometry_pose_arr[:,0],raw_odometry_pose_arr[:,1],'r*--',label="Raw Odometry")
     ax.plot(estimated_path[:,0],estimated_path[:,1],'g*--',label="Factor Graph Estimate")
     
@@ -184,11 +191,10 @@ def main(args):
     if plot_noise:
         marginals = gtsam.Marginals(factor_graph, optimized_estimate)
         for i in range(N):
-            # Get rotation from local frame to world frame
-            R_i_to_w = optimized_estimate.atPose2(i).matrix()[:2,:2]
             cov = marginals.marginalCovariance(i)
-            xy_cov = R_i_to_w @ cov[:2,:2]
+            xy_cov = cov[:2,:2]
             l1, l2, theta = compute_ellipse_radiirot(xy_cov)
+            theta += optimized_estimate.atPose2(i).theta()
             if i == 0:
                 ellipse = Ellipse(tuple([estimated_path[i,0],estimated_path[i,1]]), 
                                 width=2 * 3*np.sqrt(l1),
@@ -241,8 +247,8 @@ def parser():
     parser.add_argument('--do_loopclosure',action='store_true')
     parser.add_argument('--Tmax',default=20,type=float,help="Number of seconds to run simulation")
     parser.add_argument('--dt',default=0.5,type=float,help='Time difference between odometry factors')
-    parser.add_argument('--translational_noise',default=0.025,type=float,help='Translational noise percentage')
-    parser.add_argument('--rotational_noise',default=0.05,type=float,help='Rotational noise percentage')
+    parser.add_argument('--translational_noise',default=0.01,type=float,help='Translational noise percentage')
+    parser.add_argument('--rotational_noise',default=0.15,type=float,help='Rotational noise percentage')
     return parser
 
 if __name__ == "__main__":
